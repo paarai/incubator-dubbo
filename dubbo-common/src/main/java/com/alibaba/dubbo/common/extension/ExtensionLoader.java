@@ -94,8 +94,17 @@ public class ExtensionLoader<T> {
     private Map<String, IllegalStateException> exceptions = new ConcurrentHashMap<String, IllegalStateException>();
 
     private ExtensionLoader(Class<?> type) {
+        logger.info("创建ExtensionLoader对象 type = " +type.getName());
         this.type = type;
-        objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
+        if(type == ExtensionFactory.class){
+            logger.info("扩展加载器参数类型 type = " +type.getName()+"，objectFactory 赋值为 null;");
+            objectFactory = null;
+        }else{
+            logger.info("扩展加载器参数类型 type = " +type.getName()+"，objectFactory 赋值为 ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension();");
+            ExtensionLoader<ExtensionFactory> extensionFactoryLoader= ExtensionLoader.getExtensionLoader(ExtensionFactory.class);
+            objectFactory = extensionFactoryLoader.getAdaptiveExtension();
+        }
+        //objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
     }
 
     private static <T> boolean withExtensionAnnotation(Class<T> type) {
@@ -103,7 +112,8 @@ public class ExtensionLoader<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> ExtensionLoader<T> getExtensionLoader(Class<T> type) {
+    public static <T> ExtensionLoader<T>  getExtensionLoader(Class<T> type) {
+        logger.info("开始执行getExtensionLoader，type = " +type.getName());
         if (type == null)
             throw new IllegalArgumentException("Extension type == null");
         if (!type.isInterface()) {
@@ -114,6 +124,7 @@ public class ExtensionLoader<T> {
                     ") is not extension, because WITHOUT @" + SPI.class.getSimpleName() + " Annotation!");
         }
 
+        //先从缓存EXTENSION_LOADERS中获取对象，如果没找到，新建一个，放到缓存中，然后从缓存中取出来，在把取出来的对象返回
         ExtensionLoader<T> loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
         if (loader == null) {
             EXTENSION_LOADERS.putIfAbsent(type, new ExtensionLoader<T>(type));
@@ -433,6 +444,7 @@ public class ExtensionLoader<T> {
 
     @SuppressWarnings("unchecked")
     public T getAdaptiveExtension() {
+        logger.info("执行getAdaptiveExtension()");
         Object instance = cachedAdaptiveInstance.get();
         if (instance == null) {
             if (createAdaptiveInstanceError == null) {
@@ -705,7 +717,12 @@ public class ExtensionLoader<T> {
     @SuppressWarnings("unchecked")
     private T createAdaptiveExtension() {
         try {
-            return injectExtension((T) getAdaptiveExtensionClass().newInstance());
+            //return injectExtension((T) getAdaptiveExtensionClass().newInstance()); //原来代码实现
+            //修改后代码如下：
+            Class<?> tClazz = getAdaptiveExtensionClass();
+            T tinstance = (T) tClazz.newInstance();
+            T t =injectExtension(tinstance);
+            return t;
         } catch (Exception e) {
             throw new IllegalStateException("Can not create adaptive extension " + type + ", cause: " + e.getMessage(), e);
         }
